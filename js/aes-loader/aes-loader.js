@@ -28,40 +28,37 @@
  * 
  * 
  * @module AESLoader
- * @version 2.0.1
+ * @version 2.0.2
  * 
  * @description 
  *   Библиотека предоставляет набор стильных анимированных загрузчиков с поддержкой
  *   различных визуальных тем (Cyber, Glitch, Terminal, Minimal, Logic3D).
  *   Поддерживает автоматический показ при загрузке страницы, ручное управление,
  *   отображение финального состояния (успех/ошибка) с анимацией.
+ *   Добавлен параметр `fixed`, позволяющий зафиксировать загрузчик в области видимости (viewport)
+ *   независимо от прокрутки и контейнера.
  * 
  * @example
  * // Базовое использование (автоматический режим)
  * // Достаточно подключить скрипт — загрузчик появится сам и исчезнет после загрузки страницы.
  * 
  * @example
- * // Ручной вызов
- * const loader = new AESLoader({
- *   defaultStyle: 'glitch',
- *   defaultTitle: 'Подождите',
- *   defaultText: 'Идёт загрузка данных...'
- * });
+ * // Ручной вызов с фиксацией
+ * const loader = new AESLoader({ fixed: true });
  * const instance = loader.showLoader('cyber', 'Загрузка', 'Пожалуйста, подождите...');
- * // Через некоторое время
+ * // через некоторое время
  * instance.success('Готово!');
- * // или instance.fail('Ошибка', 'Не удалось загрузить данные');
  * 
  * @example
  * // Использование с промисом
  * const loader = new AESLoader();
- * const { promise } = loader.showLoader();
+ * const { promise } = loader.showLoader('terminal', 'Выполняется', 'Обработка...', null, null, null, null, true);
  * promise.then(() => console.log('Загрузка завершена'));
  * 
  * @example
- * // Встраивание в конкретный контейнер
+ * // Встраивание в контейнер без фиксации
  * const loader = new AESLoader({ mode: 'window' });
- * const inst = loader.showLoader('terminal', 'Выполняется', 'Обработка...', null, '#my-container');
+ * const inst = loader.showLoader('minimal', 'Загрузка', 'Идёт загрузка...', null, '#my-container');
  */
 
 (function (global) {
@@ -80,6 +77,7 @@
         autoStart: true,          // автоматически показать загрузчик при загрузке страницы
         zIndex: 998,              // z-index оверлея
         showFinal: true,          // показывать финальный экран (успех/ошибка) перед закрытием
+        fixed: false,             // фиксировать загрузчик на экране (viewport), игнорируя контейнеры
     };
 
     // ========================================================================
@@ -98,6 +96,7 @@
      * @param {boolean} [config.autoStart=true] - автоматический показ при загрузке
      * @param {number} [config.zIndex=9999] - z-index оверлея
      * @param {boolean} [config.showFinal=true] - показывать финальную анимацию
+     * @param {boolean} [config.fixed=false] - фиксировать загрузчик на экране (viewport)
      * @returns {AESLoader} Экземпляр загрузчика
      */
     class AESLoader {
@@ -969,7 +968,8 @@
                     null,
                     null,
                     this.config.defaultFinalText,
-                    this.config.showFinal
+                    this.config.showFinal,
+                    this.config.fixed
                 );
                 const hideOnLoad = () => {
                     loader.success();
@@ -993,10 +993,14 @@
         /**
          * Возвращает массив DOM-элементов-контейнеров для отображения загрузчика.
          * @param {string|Element|null} element - селектор или элемент (опционально)
+         * @param {boolean} fixed - флаг фиксации на экране
          * @returns {Element[]} массив контейнеров
          * @private
          */
-        _getContainers(element) {
+        _getContainers(element, fixed) {
+            if (fixed) {
+                return [document.body || document.documentElement];
+            }
             let containers = [];
             if (element) {
                 const el = typeof element === 'string' ? document.querySelector(element) : element;
@@ -1027,9 +1031,10 @@
          * @param {string} [title] - заголовок
          * @param {string} [text] - подзаголовок / описание
          * @param {number|null} [period] - таймаут в мс, по истечении которого загрузчик автоматически завершится ошибкой
-         * @param {string|Element|null} [element] - контейнер (селектор или DOM-элемент)
+         * @param {string|Element|null} [element] - контейнер (селектор или DOM-элемент) – игнорируется, если `fixed` === true
          * @param {string} [finalText] - финальный текст при успехе
          * @param {boolean} [showFinal] - показывать ли финальный экран
+         * @param {boolean} [fixed] - фиксировать загрузчик на экране (viewport), игнорируя контейнер
          * @returns {Object} Объект управления загрузчиком:
          *   - id: {string} уникальный идентификатор
          *   - hide: {function} принудительно скрыть
@@ -1038,9 +1043,9 @@
          *   - promise: {Promise} промис, который резолвится при успехе или реджектится при ошибке
          *   - then/catch: методы промиса для удобства
          */
-        showLoader(style = this.config.defaultStyle, title = this.config.defaultTitle, text = this.config.defaultText, period = null, element = null, finalText = this.config.defaultFinalText, showFinal = this.config.showFinal) {
+        showLoader(style = this.config.defaultStyle, title = this.config.defaultTitle, text = this.config.defaultText, period = null, element = null, finalText = this.config.defaultFinalText, showFinal = this.config.showFinal, fixed = this.config.fixed) {
             const id = `aes-loader-${++this.counter}`;
-            const containers = this._getContainers(element);
+            const containers = this._getContainers(element, fixed);
 
             if (containers.length === 0) {
                 containers = [document.body || document.documentElement];
@@ -1050,8 +1055,9 @@
             containers.forEach(container => {
                 const wrapper = document.createElement('div');
                 const isBody = container === document.body || container === document.documentElement;
+                const useOverlay = fixed || isBody;
                 wrapper.className = `aes-loader-wrapper aes-loader-${style}`;
-                if (isBody) {
+                if (useOverlay) {
                     wrapper.classList.add('aes-loader-overlay');
                 } else {
                     wrapper.classList.add('aes-loader-container');
@@ -1465,7 +1471,8 @@
             const defaultStyle = currentScript.getAttribute('data-default-style') || 'cyber';
             const autoStart = currentScript.getAttribute('data-auto-start') !== 'false';
             const showFinal = currentScript.getAttribute('data-show-final') !== 'false';
-            const config = { mode, containers, defaultStyle, autoStart, showFinal };
+            const fixed = currentScript.getAttribute('data-fixed') === 'true'; // новый атрибут
+            const config = { mode, containers, defaultStyle, autoStart, showFinal, fixed };
             instance = initFromConfig(config);
         } else {
             instance = global.__aesLoaderInstance || new AESLoader();
